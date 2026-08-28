@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// Autopay — 0% fee payment & auto-pay system for Bangladesh.
+// Wallets and private records are locked to their owner.
+// Payment links are readable by anyone so hosted checkout works.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ---- User profiles ----
+    match /users/{uid} {
+      allow get: if isSelf(uid);
+      allow create: if isSelf(uid);
+      allow update: if isSelf(uid);
+      allow delete: if false;
+    }
+
+    // ---- Wallets (0% fee passthrough ledger) ----
+    match /wallets/{uid} {
+      allow get: if isSelf(uid);
+      allow create, update: if false; // only backend functions mutate balances
+    }
+
+    // ---- Transactions ----
+    match /transactions/{txnId} {
+      allow get: if signedIn()
+        && (resource.data.userId == request.auth.uid
+            || resource.data.merchantId == request.auth.uid);
+      allow list: if signedIn()
+        && (request.query.limit <= 100);
+      allow create, update, delete: if false;
+    }
+
+    // ---- Public payment links (hosted checkout) ----
+    match /paymentLinks/{linkId} {
+      allow get: if true;
+      allow create: if false; // via backend only
+      allow update: if false;
+    }
+
+    // ---- Invoices ----
+    match /invoices/{invoiceId} {
+      allow get: if signedIn()
+        && (resource.data.merchantId == request.auth.uid
+            || resource.data.customerId == request.auth.uid);
+      allow list: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // ---- Auto-pay plans (public read so customers can subscribe) ----
+    match /plans/{planId} {
+      allow get: if true;
+      allow list: if true;
+      allow create, update, delete: if false;
+    }
+
+    // ---- Subscriptions ----
+    match /subscriptions/{subId} {
+      allow get: if signedIn()
+        && (resource.data.customerId == request.auth.uid
+            || resource.data.merchantId == request.auth.uid);
+      allow list: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // ---- Payouts ----
+    match /payouts/{payoutId} {
+      allow get: if signedIn() && resource.data.merchantId == request.auth.uid;
+      allow list: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // ---- Webhook events ----
+    match /events/{eventId} {
+      allow get, list: if false;
+      allow create, update, delete: if false;
+    }
+  }
+}

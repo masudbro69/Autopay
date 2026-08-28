@@ -1,0 +1,17 @@
+{
+  "name": "autopay-functions",
+  "version": "1.0.0",
+  "description": "Autopay — 0% fee payment & auto-pay backend for Bangladesh (Firebase Functions)",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions,firestore,auth",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.0"
+  }
+}
