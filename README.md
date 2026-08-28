@@ -29,32 +29,34 @@ Every payment / invoice / subscription charge collects a transparent platform fe
 
 ## 🚀 Deploy
 
-### Option A — GitHub Actions (recommended, automated)
+Two ready-made CI workflows live in **`ci/`** (`ci/firebase.yml`, `ci/github-pages.yml`). They are stored outside `.github/workflows/` because an automated integration can't commit workflow files to your repo — just drop them in and they activate.
 
-The repo ships two workflows:
-
-1. **`.github/workflows/pages.yml`** — deploys the static app to **GitHub Pages** (works with zero secrets; runs in sandbox mode).
-2. **`.github/workflows/firebase.yml`** — deploys **Functions + Firestore rules + Hosting** to `auto-pay-66e8c` (LIVE) once you add one secret.
-
-To go live:
+### Step 1 — enable CI (one time, 2 minutes)
 
 ```bash
-# 1. Generate a CI token on your machine
+# On your machine:
+mkdir -p .github/workflows
+cp ci/firebase.yml ci/github-pages.yml .github/workflows/
+git add .github/workflows && git commit -m "Add CI/CD workflows" && git push
+
+# Generate a Firebase CI token
 npm i -g firebase-tools
-firebase login:ci          # prints a token
+firebase login:ci     # prints a token — copy it
 
-# 2. Add it to GitHub: repo → Settings → Secrets and variables → Actions
-#    New repository secret:  FIREBASE_TOKEN = <token>
+# GitHub → repo → Settings → Secrets and variables → Actions → New secret
+#   FIREBASE_TOKEN = <token>
 
-# 3. Set your owner email (so YOU see the Earnings dashboard)
-#    Functions env var AUTOPAY_OWNER_EMAIL = your-email@gmail.com
-#    (Set via: firebase functions:secrets:set AUTOPAY_OWNER_EMAIL  OR  in
-#     Firebase Console → Functions → Configuration, or the GitHub Actions env.)
+# Also set your owner email so YOU see the Earnings dashboard:
+#   firebase functions:secrets:set AUTOPAY_OWNER_EMAIL
+#   (or in Firebase Console → Functions → Configuration)
 ```
 
-Then push (or run the workflow from the Actions tab) — CI deploys automatically.
+After that, every push auto-deploys:
 
-### Option B — Deploy locally
+- **`ci/firebase.yml`** → deploys **Functions + Firestore rules + indexes + Hosting** to `auto-pay-66e8c` (**LIVE**).
+- **`ci/github-pages.yml`** → deploys the static app to **GitHub Pages** (sandbox preview).
+
+### Option B — Deploy locally (no CI)
 
 ```bash
 npm i -g firebase-tools
@@ -67,6 +69,13 @@ firebase functions:secrets:set AUTOPAY_OWNER_EMAIL
 firebase deploy --only firestore:rules,firestore:indexes
 firebase deploy --only functions
 firebase deploy --only hosting
+```
+
+### Run locally (sandbox preview)
+
+```bash
+cd hosting
+python3 -m http.server 8080     # → http://localhost:8080
 ```
 
 ### Authorized domains (Google sign-in)
