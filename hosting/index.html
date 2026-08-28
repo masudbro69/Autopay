@@ -4,21 +4,28 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#046c4e" />
-  <title>Autopay — বাংলাদেশের ০% ফি পেমেন্ট ও অটো-পে</title>
-  <meta name="description" content="Autopay — বাংলাদেশের প্রথম ০% ফি পেমেন্ট সিস্টেম। bKash, Nagad, Rocket, Upay, কার্ডে পেমেন্ট নিন এবং অটো-পে সাবস্ক্রিপশন চালান।" />
+  <title>Autopay — বাংলাদেশের পেমেন্ট ও অটো-পে প্ল্যাটফর্ম</title>
+  <meta name="description" content="Autopay — bKash, Nagad, Rocket, Upay, কার্ডে পেমেন্ট গ্রহণ করুন, অটো-পে সাবস্ক্রিপশন চালান। স্বচ্ছ লেনদেন ফি, রিয়েল-টাইম সেটেলমেন্ট।" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23046c4e'/%3E%3Cpath d='M17.5 6 9 18h5.5l-1.5 8L22 13h-5.5l1-7z' fill='%23fff'/%3E%3C/svg%3E" />
+
+  <!-- Firebase SDKs (Auth + Firestore + Functions) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 </head>
 <body>
   <div id="app" aria-live="polite"></div>
   <div id="toast-root" class="toast-root"></div>
   <div id="modal-root"></div>
 
+  <script src="js/config.js"></script>
   <script src="js/i18n.js"></script>
-  <script src="js/demo.js"></script>
+  <script src="js/sandbox.js"></script>
   <script src="js/backend.js"></script>
   <script src="js/app.js"></script>
 </body>

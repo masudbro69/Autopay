@@ -37,6 +37,9 @@
     if (code === "link-expired") return t("payExpired");
     if (code === "invalid-credentials") return t("invalidCreds");
     if (code === "email-exists") return t("emailExists");
+    if (code === "permission-denied") return t("permissionDenied");
+    if (code === "google-unavailable") return t("googleUnavailable");
+    if (code === "functions/not-found" || code === "internal" || code === "unavailable") return t("backendNotDeployed");
     return (e && e.message) || "Error";
   }
 
@@ -93,6 +96,9 @@
   function logoMark(size = 36) {
     return `<span class="logo-mark" style="width:${size}px;height:${size}px"><svg viewBox="0 0 24 24" fill="currentColor" width="${Math.round(size * 0.56)}" height="${Math.round(size * 0.56)}"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>`;
   }
+  function googleLogo(size = 18) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+  }
 
   /* ---------------- gateway metadata ---------------- */
   const GW = {
@@ -110,11 +116,22 @@
 
   function userName(id) {
     if (!id) return "—";
-    if (!window.API.backend.useFirebase && window.Demo) {
-      const u = window.Demo._db().users[id];
-      if (u) return u.name || u.company || u.email || id;
-    }
     return String(id).slice(0, 10);
+  }
+
+  // Platform fee helpers (mirrors the Cloud Functions fee engine)
+  function feeConfig() {
+    return (window.APP_CONFIG && window.APP_CONFIG.fee) || { rate: 0.02, minFee: 5, maxFee: 500, currency: "BDT" };
+  }
+  function calcFee(amount) {
+    const f = feeConfig();
+    const amt = round2(amount);
+    if (amt <= 0) return 0;
+    return round2(Math.min(Math.max(amt * (f.rate || 0), f.minFee || 0), f.maxFee || Infinity));
+  }
+  function feeRateText() {
+    const f = feeConfig();
+    return Math.round((f.rate || 0) * 100) + "%";
   }
 
   /* ---------------- toast & modal ---------------- */
@@ -134,6 +151,23 @@
     return backdrop;
   }
   function closeModal() { $("#modal-root").innerHTML = ""; }
+
+  function copyText(text, notify = false) {
+    const done = () => { if (notify) toast(t("copied")); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(done).catch(() => {});
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      done();
+    } catch (e) { /* ignore */ }
+  }
 
   /* ---------------- router ---------------- */
   function currentRoute() {
@@ -179,24 +213,24 @@
                 <p class="lead">${t("heroLead")}</p>
                 <div class="hero-ctas">
                   <button class="btn btn-primary btn-lg" data-auth="signup">${t("getStarted")} ${icon("arrowRight")}</button>
-                  <button class="btn btn-outline btn-lg" data-auth="demo">${t("viewDemo")}</button>
+                  <button class="btn btn-outline btn-lg" data-auth="login">${t("login")}</button>
                 </div>
                 <div class="hero-stats">
-                  <div class="hs"><b>12k+</b><span>${t("statUsers")}</span></div>
-                  <div class="hs"><b>৳9.6Cr</b><span>${t("statVolume")}</span></div>
-                  <div class="hs"><b>৳1.1Cr</b><span>${t("statFees")}</span></div>
-                  <div class="hs"><b>99.9%</b><span>${t("statUptime")}</span></div>
+                  <div class="hs"><b>${t("statSetupV")}</b><span>${t("statSetup")}</span></div>
+                  <div class="hs"><b>${t("statFeeV")}</b><span>${t("statFee")}</span></div>
+                  <div class="hs"><b>${t("statAutoV")}</b><span>${t("statAuto")}</span></div>
+                  <div class="hs"><b>${t("statInstantV")}</b><span>${t("statInstant")}</span></div>
                 </div>
               </div>
               <div class="phone-mock">
-                <div class="pm-head"><span class="logo" style="font-size:15px">${logoMark(28)} Autopay</span><span class="badge badge-green"><span class="dot"></span>${t("statusActive")}</span></div>
-                <div class="pm-balance"><small>${t("dashBalance")}</small><b>${money(24580)}</b>
-                  <div class="flex between small" style="opacity:.9"><span>${t("navTransactions")}</span><span>+${icon("trending", 14)} 18%</span></div>
+                <div class="pm-head"><span class="logo" style="font-size:15px">${logoMark(28)} Autopay</span><span class="badge badge-green"><span class="dot"></span>${t("liveNotice")}</span></div>
+                <div class="pm-balance"><small>${t("dashBalance")}</small><b>${money(0)}</b>
+                  <div class="flex between small" style="opacity:.9"><span>${t("wallet")} · BDT</span><span>${t("feeRateLabel")} ${feeRateText()}</span></div>
                 </div>
                 <div class="mt-8">
-                  ${pmRow("bkash", "bKash", "Payout", "completed", "+৳12,500")}
-                  ${pmRow("nagad", "Nagad", "Top-up", "completed", "+৳2,000")}
-                  ${pmRow("card", "Visa", "Order #1031", "completed", "+৳1,200")}
+                  ${pmRow("bkash", "bKash", "bKash", t("statusActive"), "—")}
+                  ${pmRow("nagad", "Nagad", "Nagad", t("statusActive"), "—")}
+                  ${pmRow("card", "VC", "Visa/Mastercard", t("statusActive"), "—")}
                 </div>
               </div>
             </div>
@@ -231,13 +265,16 @@
       <div class="section container" style="padding-top:0">
         <div class="section-head"><span class="kicker">${t("pricingKicker")}</span><h2>${t("pricingTitle")}</h2><p>${t("pricingSub")}</p></div>
         <div class="pricing">
-          <div class="price-card"><h3>${t("planStarter")}</h3><div class="price">${t("planFree")}<small>${t("planForever")}</small></div>
-            <ul><li>${t("planItem1")}</li><li>${t("planItem2")}</li><li>${t("planItem4")}</li></ul>
+          <div class="price-card"><h3>${t("planStarter")}</h3><div class="price">${t("planStarterPrice")}</div>
+            <p class="card-sub">${t("planStarterFee")}</p>
+            <ul><li>${t("planItem1")}</li><li>${t("planItem2")}</li><li>${t("planItem3")}</li><li>${t("planItem4")}</li></ul>
             <button class="btn btn-outline btn-block" data-auth="signup">${t("choosePlan")}</button></div>
-          <div class="price-card hot"><span class="pop-tag">POPULAR</span><h3>${t("planGrowth")}</h3><div class="price">${t("planFree")}<small>${t("planForever")}</small></div>
+          <div class="price-card hot"><span class="pop-tag">POPULAR</span><h3>${t("planGrowth")}</h3><div class="price">${t("planGrowthPrice")}</div>
+            <p class="card-sub">${t("planGrowthFee")} · ${t("planSoon")}</p>
             <ul><li>${t("planItem1")}</li><li>${t("planItem2")}</li><li>${t("planItem3")}</li><li>${t("planItem4")}</li><li>${t("planItem5")}</li><li>${t("planItem6")}</li></ul>
             <button class="btn btn-primary btn-block" data-auth="signup">${t("choosePlan")}</button></div>
-          <div class="price-card"><h3>${t("planScale")}</h3><div class="price">${t("planFree")}<small>${t("planForever")}</small></div>
+          <div class="price-card"><h3>${t("planScale")}</h3><div class="price">${t("planScalePrice")}</div>
+            <p class="card-sub">${t("planScaleFee")} · ${t("planSoon")}</p>
             <ul><li>${t("planItem1")}</li><li>${t("planItem2")}</li><li>${t("planItem3")}</li><li>${t("planItem7")}</li><li>${t("planItem8")}</li></ul>
             <button class="btn btn-outline btn-block" data-auth="signup">${t("choosePlan")}</button></div>
         </div>
@@ -255,14 +292,11 @@
             <div class="foot-col"><h4>${t("footCompany")}</h4><ul><li>${t("footAbout")}</li><li>${t("footBlog")}</li><li>${t("footCareers")}</li></ul></div>
             <div class="foot-col"><h4>${t("footResources")}</h4><ul><li>${t("footDocs")}</li><li>${t("footApi")}</li><li>${t("footStatus")}</li></ul></div>
           </div>
-          <div class="foot-bottom"><span>© ${new Date().getFullYear()} Autopay. ${t("footRights")}</span><span>${t("demoNotice")}</span></div>
+          <div class="foot-bottom"><span>© ${new Date().getFullYear()} Autopay. ${t("footRights")}</span><span>${window.API.backend.live ? t("liveNotice") : t("sandboxNotice")} · v1.0</span></div>
         </div>
       </footer>`;
     $$("[data-lang]").forEach((b) => b.addEventListener("click", () => { window.I18N.setLang(b.dataset.lang); render(); }));
-    $$("[data-auth]").forEach((b) => b.addEventListener("click", () => {
-      const a = b.dataset.auth;
-      if (a === "demo") { demoLogin("merchant"); } else goto("#/auth?mode=" + a);
-    }));
+    $$("[data-auth]").forEach((b) => b.addEventListener("click", () => goto("#/auth?mode=" + b.dataset.auth)));
     window.scrollTo(0, 0);
   }
 
@@ -303,24 +337,31 @@
               ${isSignup ? `<label class="flex gap-8 mb-16" style="cursor:pointer"><input type="checkbox" name="role" value="merchant"> <span>${t("iAmMerchant")}</span></label>` : ""}
               <button class="btn btn-primary btn-lg btn-block" type="submit">${isSignup ? t("createAccount") : t("login")} ${icon("arrowRight")}</button>
             </form>
+            <div class="flex center gap-8 mt-16" style="align-items:center"><span style="height:1px;background:var(--line);flex:1"></span><span class="small muted">${t("or")}</span><span style="height:1px;background:var(--line);flex:1"></span></div>
+            ${window.API.backend.live ? `
+              <button class="btn btn-outline btn-lg btn-block mt-16" data-google style="gap:10px">${googleLogo(18)} ${t("continueGoogle")}</button>
+              <p class="small muted tac mt-8">${t("googleNote")}</p>` : ""}
             <p class="tac small mt-16">${isSignup ? t("haveAccount") : t("noAccount")} <a href="#/auth?mode=${isSignup ? "login" : "signup"}">${isSignup ? t("login") : t("signup")}</a></p>
-            <div class="demo-login">
-              <div class="small muted mb-8"><b>${t("demoTitle")}</b> — ${t("demoTitleSub")}</div>
-              <button class="demo-acc" data-demo="merchant">
-                <span class="avatar" style="background:${colorFor("Rahim")}">R</span>
-                <span class="grow"><b>${t("merchantAccount")}</b><span>demo-merchant@autopay.bd · autopay</span></span>${icon("arrowRight", 16)}
-              </button>
-              <button class="demo-acc" data-demo="customer">
-                <span class="avatar" style="background:${colorFor("Karim")}">K</span>
-                <span class="grow"><b>${t("customerAccount")}</b><span>demo-customer@autopay.bd · autopay</span></span>${icon("arrowRight", 16)}
-              </button>
-            </div>
           </div>
         </div>
       </div>`;
 
     $$("[data-lang]").forEach((b) => b.addEventListener("click", () => { window.I18N.setLang(b.dataset.lang); render(); }));
-    $$("[data-demo]").forEach((b) => b.addEventListener("click", () => demoLogin(b.dataset.demo)));
+    $$("[data-google]").forEach((b) => b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        const u = await window.API.auth.signInWithGoogle();
+        // Ensure the Firestore profile + wallet exist for Google users.
+        try { await window.API.backend.register({ name: u.name || "", role: "customer" }); } catch (e) { /* non-fatal */ }
+        await finishAuth();
+      } catch (err) {
+        const code = err && err.code;
+        if (code === "auth/popup-blocked") toast(t("popupBlocked"), "err");
+        else if (code === "auth/popup-closed-by-user") { /* silent */ }
+        else if (code === "google-unavailable") toast(t("googleUnavailable"), "err");
+        else toast((err && err.message) || "Error", "err");
+      } finally { b.disabled = false; }
+    }));
     const form = $("[data-auth-form]");
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -347,11 +388,6 @@
     });
   }
 
-  function demoLogin(role) {
-    const email = role === "merchant" ? "demo-merchant@autopay.bd" : "demo-customer@autopay.bd";
-    window.API.auth.signIn(email, "autopay").then(finishAuth).catch((e) => toast(e.message, "err"));
-  }
-
   async function finishAuth() {
     await loadProfile();
     const next = new URLSearchParams(location.hash.split("?")[1] || "").get("next");
@@ -364,13 +400,22 @@
       state.profile = r.user || {};
       state.wallet = r.wallet || { balance: 0 };
     } catch (e) { state.profile = { role: "customer" }; }
+    // Detect platform owner (unlocks the Earnings dashboard).
+    state.isOwner = false;
+    try {
+      const er = await window.API.backend.getEarnings();
+      state.isOwner = !!(er && er.isOwner);
+      state.earnings = er;
+    } catch (e) { state.isOwner = false; }
   }
+
+  function isOwner() { return !!state.isOwner; }
 
   /* ================= APP SHELL ================= */
   const ROUTE_TITLES = {
     overview: "navOverview", wallet: "navWallet", links: "navLinks", invoices: "navInvoices",
     plans: "navPlans", subscriptions: "navSubscriptions", transactions: "navTransactions",
-    customers: "navCustomers", payouts: "navPayouts", settings: "navSettings",
+    customers: "navCustomers", payouts: "navPayouts", settings: "navSettings", earnings: "navEarnings",
   };
 
   function navItems() {
@@ -380,9 +425,11 @@
       { key: "transactions", icon: "list" },
       { key: "settings", icon: "settings" },
     ];
+    const items = [];
+    items.push(common[0]);
+    if (isOwner()) items.push({ key: "earnings", icon: "gift" });
     if (isMerchant()) {
-      return [
-        common[0],
+      items.push(
         { key: "links", icon: "link" },
         { key: "invoices", icon: "file" },
         { key: "plans", icon: "repeat" },
@@ -391,17 +438,18 @@
         { key: "transactions", icon: "list" },
         { key: "payouts", icon: "payout" },
         { key: "customers", icon: "users" },
-        { key: "settings", icon: "settings" },
-      ];
+        { key: "settings", icon: "settings" }
+      );
+    } else {
+      items.push(
+        common[1],
+        { key: "links", icon: "link" },
+        { key: "subscriptions", icon: "refresh" },
+        { key: "transactions", icon: "list" },
+        { key: "settings", icon: "settings" }
+      );
     }
-    return [
-      common[0],
-      { key: "wallet", icon: "wallet" },
-      { key: "links", icon: "link" },
-      { key: "subscriptions", icon: "refresh" },
-      { key: "transactions", icon: "list" },
-      { key: "settings", icon: "settings" },
-    ];
+    return items;
   }
 
   function shell(body) {
@@ -428,7 +476,7 @@
             <button class="hamburger" data-open-sidebar>${icon("menu", 20)}</button>
             <h1>${t(ROUTE_TITLES[state.route])}</h1>
             <div class="spacer"></div>
-            ${window.API.backend.useFirebase ? "" : `<span class="badge badge-amber">${icon("zap", 13)} ${t("demoNotice")}</span>`}
+            ${window.API.backend.live ? `<span class="badge badge-green"><span class="dot"></span>${t("liveNotice")}</span>` : `<span class="badge badge-amber">${icon("zap", 13)} ${t("sandboxNotice")}</span>`}
             <div class="lang-toggle">
               <button data-lang="bn" class="${lang() === "bn" ? "on" : ""}">বাং</button>
               <button data-lang="en" class="${lang() === "en" ? "on" : ""}">EN</button>
@@ -467,6 +515,7 @@
         case "transactions": body = await viewTransactions(); break;
         case "customers": body = await viewCustomers(); break;
         case "payouts": body = await viewPayouts(); break;
+        case "earnings": body = await viewEarnings(); break;
         case "settings": body = await viewSettings(); break;
         default: body = await viewOverview();
       }
@@ -489,12 +538,13 @@
     if (r === "subscriptions") bindSubscriptions();
     if (r === "transactions") bindTransactions();
     if (r === "payouts") bindPayouts();
+    if (r === "earnings") bindEarnings();
     if (r === "settings") bindSettings();
   }
 
   /* ---------- shared: txn rendering ---------- */
   function txnTypeLabel(type) {
-    return ({ topup: t("txnTopup"), payment: t("txnPayment"), invoice: t("txnInvoice"), subscription: t("txnSubscription"), payout: t("txnPayout"), refund: t("txnRefund") })[type] || type || "—";
+    return ({ topup: t("txnTopup"), payment: t("txnPayment"), invoice: t("txnInvoice"), subscription: t("txnSubscription"), payout: t("txnPayout"), refund: t("txnRefund"), fee: t("platformFee") })[type] || type || "—";
   }
   function txnRow(txn) {
     const me = state.user.uid;
@@ -536,7 +586,8 @@
     return `<span class="badge ${m[0]}"><span class="dot"></span>${m[1]}</span>`;
   }
   function feeNote() {
-    return `<div class="fee-note">${icon("shield")} <span>${t("zeroFee")}</span></div>`;
+    const f = feeConfig();
+    return `<div class="fee-note">${icon("shield")} <span>${t("platformFee")}: ${feeRateText()} (${money(f.minFee)} – ${money(f.maxFee)})</span></div>`;
   }
 
   /* ---------- overview ---------- */
@@ -588,7 +639,7 @@
     const statCards = `
       <div class="stat tone-green"><div class="flex between"><span class="s-label">${t("dashBalance")}</span><span class="s-ico">${icon("wallet")}</span></div><div class="s-value">${money(stats.balance || 0)}</div><div class="s-sub">${t("wallet")} · BDT</div></div>
       <div class="stat tone-blue"><div class="flex between"><span class="s-label">${merchant ? t("dashReceived") : t("dashPaid")}</span><span class="s-ico">${icon("trending")}</span></div><div class="s-value">${money(merchant ? stats.totalReceived : stats.totalPaid)}</div><div class="s-sub">${t("dashSeeAll")} → <a href="#/app/transactions">${t("navTransactions")}</a></div></div>
-      <div class="stat tone-red"><div class="flex between"><span class="s-label">${t("dashFeeSaved")}</span><span class="s-ico">${icon("gift")}</span></div><div class="s-value">${money(stats.feeSaved || 0)}</div><div class="s-sub">${t("feeZero")} · 0%</div></div>
+      <div class="stat tone-red"><div class="flex between"><span class="s-label">${t("feeRateLabel")}</span><span class="s-ico">${icon("gift")}</span></div><div class="s-value">${feeRateText()}</div><div class="s-sub">${t("platformFee")} · ${t("amount")} +</div></div>
       <div class="stat tone-amber"><div class="flex between"><span class="s-label">${merchant ? t("dashSubs") : t("dashSubs")}</span><span class="s-ico">${icon("refresh")}</span></div><div class="s-value">${subsList.filter((s) => s.status === "active").length}</div><div class="s-sub">${t("navSubscriptions")}</div></div>`;
 
     return `
@@ -693,7 +744,7 @@
           </div>
           <div data-otp-wrap class="${method !== "wallet" && GW[method].otp ? "" : "hidden"} mt-16">
             <div class="field"><label>${t("otpTitle")}</label></div>
-            <div class="fee-note mb-8" style="background:var(--blue-soft);border-color:#c7d8ff;color:#1e40af">${icon("phone")} ${t("demoOtp")}: ${t("otpIs")} <b>1234</b></div>
+            ${!window.API.backend.live ? `<div class="fee-note mb-8" style="background:var(--blue-soft);border-color:#c7d8ff;color:#1e40af">${icon("phone")} ${t("sandboxNotice")} — ${t("otpIs")} <b>1234</b></div>` : ""}
             <input class="input" data-otp inputmode="numeric" placeholder="1234" maxlength="6">
           </div>
           <button class="btn btn-primary btn-lg btn-block mt-16" data-confirm>${t("payNow")} ${icon("arrowRight")}</button>
@@ -759,7 +810,7 @@
   function bindLinks() {
     $$("[data-copy]").forEach((b) => b.addEventListener("click", () => {
       const url = location.origin + location.pathname + "#/pay/" + b.dataset.copy;
-      navigator.clipboard.writeText(url).then(() => toast(t("copied"))).catch(() => {});
+      copyText(url, true);
     }));
     $$("[data-new]").forEach((b) => b.addEventListener("click", () => {
       openModal(`
@@ -782,7 +833,7 @@
         render();
         // offer copy
         const url = location.origin + location.pathname + "#/pay/" + r.link.id;
-        navigator.clipboard.writeText(url).catch(() => {});
+        copyText(url);
       });
     }));
   }
@@ -1042,10 +1093,50 @@
     }));
   }
 
+  /* ---------- earnings (platform owner) ---------- */
+  async function viewEarnings() {
+    let data = state.earnings;
+    try { data = await window.API.backend.getEarnings(); } catch (e) { data = null; }
+    if (!data || !data.isOwner) {
+      return `
+        <div class="page-head"><div><h2>${t("earningsTitle")}</h2><p>${t("earningsSub")}</p></div></div>
+        <div class="card card-pad">${emptyState(t("earningsAvailable"), "key")}</div>`;
+    }
+    const stats = data.stats || {};
+    const fees = data.fees || [];
+    const rows = fees.length ? fees.map((fx) => {
+      const me = state.user.uid;
+      const incoming = fx.toUid === me;
+      return `<tr>
+        <td>${fmtDateTime(fx.createdAt)}</td>
+        <td>${esc(fx.description || t("platformFee"))}</td>
+        <td class="muted">${esc(String((fx.fromUid || "")).slice(0, 10) || "—")}</td>
+        <td class="tar"><b class="text-success">+${money(fx.amount)}</b></td>
+      </tr>`;
+    }).join("") : `<tr><td colspan="4">${emptyState(t("noEarnings"), "gift")}</td></tr>`;
+
+    return `
+      <div class="page-head"><div><h2>${t("earningsTitle")}</h2><p>${t("earningsSub")}</p></div></div>
+      <div class="stat-grid">
+        <div class="stat tone-green"><div class="flex between"><span class="s-label">${t("totalFees")}</span><span class="s-ico">${icon("gift")}</span></div><div class="s-value">${money(stats.totalFees || 0)}</div><div class="s-sub">${t("feeRateLabel")} ${feeRateText()}</div></div>
+        <div class="stat tone-blue"><div class="flex between"><span class="s-label">${t("feeCount")}</span><span class="s-ico">${icon("list")}</span></div><div class="s-value">${stats.feeCount || 0}</div><div class="s-sub">${t("platformFee")}</div></div>
+        <div class="stat tone-amber"><div class="flex between"><span class="s-label">${t("feeBalance")}</span><span class="s-ico">${icon("wallet")}</span></div><div class="s-value">${money(stats.balance || 0)}</div><div class="s-sub">${t("wallet")} · BDT</div></div>
+        <div class="stat tone-red"><div class="flex between"><span class="s-label">${t("feeRateLabel")}</span><span class="s-ico">${icon("chart")}</span></div><div class="s-value">${feeRateText()}</div><div class="s-sub">${t("platformFee")}</div></div>
+      </div>
+      <div class="card card-pad">
+        <h3 class="card-title">${t("feeTxns")}</h3>
+        <div class="table-wrap mt-16"><table class="tbl">
+          <thead><tr><th>${t("date")}</th><th>${t("description")}</th><th>${t("counterparty")}</th><th class="tar">${t("amount")}</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+      </div>`;
+  }
+  function bindEarnings() {}
+
   /* ---------- settings ---------- */
   async function viewSettings() {
     const p = state.profile || {};
-    const apiKey = window.API.backend.useFirebase ? "pk_live_••••••••" : "pk_sandbox_" + Math.random().toString(36).slice(2, 12);
+    const f = feeConfig();
+    const apiKey = window.API.backend.live ? "pk_live_••••••••••••" : "pk_sandbox_" + state.user.uid.slice(0, 8);
     return `
       <div class="page-head"><div><h2>${t("settingsTitle")}</h2><p>${t("settingsSub")}</p></div></div>
       <div class="grid-2b">
@@ -1058,16 +1149,16 @@
           <button class="btn btn-primary" data-save>${icon("check")} ${t("save")}</button>
         </div>
         <div class="card card-pad">
-          <h3 class="card-title">${t("apiKeys")}</h3>
+          <h3 class="card-title">${t("integration")}</h3>
+          <div class="flex gap-8 mt-8 wrap">
+            <span class="badge ${window.API.backend.live ? "badge-green" : "badge-amber"}"><span class="dot"></span>${window.API.backend.live ? "Firebase · " + t("liveNotice") : t("sandboxNotice")}</span>
+            <span class="badge badge-blue">${t("feeRateLabel")} ${feeRateText()}</span>
+            <span class="badge badge-gray">BDT</span>
+          </div>
+          <div class="fee-note mt-16">${icon("shield")} ${t("platformFee")}: ${feeRateText()} (${money(f.minFee)} – ${money(f.maxFee)})</div>
+          <h3 class="card-title mt-24">${t("apiKeys")}</h3>
           <p class="card-sub">${t("apiKeyHint")}</p>
           <div class="copy-field mt-16"><input class="input mono" readonly value="${esc(apiKey)}"><button class="btn btn-outline" data-copy="${esc(apiKey)}">${icon("copy", 15)}</button></div>
-          <h3 class="card-title mt-24">${t("integration")}</h3>
-          <div class="flex gap-8 mt-8 wrap">
-            <span class="badge ${window.API.backend.useFirebase ? "badge-green" : "badge-amber"}"><span class="dot"></span>${window.API.backend.useFirebase ? "Firebase (live)" : t("demoNotice")}</span>
-            <span class="badge badge-gray">0% ${t("fee")}</span>
-            <span class="badge badge-blue">BDT</span>
-          </div>
-          <div class="fee-note mt-16">${icon("shield")} ${t("zeroFee")}</div>
         </div>
       </div>`;
   }
@@ -1078,7 +1169,7 @@
       toast(t("saved")); loadProfile();
     }));
     $$("[data-copy]").forEach((b) => b.addEventListener("click", () => {
-      navigator.clipboard.writeText(b.dataset.copy).then(() => toast(t("copied"))).catch(() => {});
+      copyText(b.dataset.copy, true);
     }));
   }
 
@@ -1125,6 +1216,8 @@
       } else if (expired) {
         body.innerHTML = checkoutCard(`<div class="empty"><div class="e-ico">${icon("clock", 30)}</div><p>${t("payExpired")}</p></div>`);
       } else {
+        const fee = calcFee(link.amount);
+        const merchantGets = round2(link.amount - fee);
         body.innerHTML = checkoutCard(`
           <div class="checkout-brand">
             <div class="merchant">${t("payingTo")} · ${esc(merchant ? merchant.name || merchant.company : "—")}</div>
@@ -1132,7 +1225,14 @@
             <div class="merchant">${esc(link.description || "")}</div>
           </div>
           <div class="checkout-body">
-            ${feeNote()}
+            <div class="card" style="background:var(--bg);border:1px solid var(--line)">
+              <div class="card-pad" style="padding:14px 16px">
+                <div class="small muted mb-8">${t("feeBreakdown")}</div>
+                <div class="flex between" style="padding:5px 0"><span class="small">${t("buyerPays")}</span><b>${money(link.amount)}</b></div>
+                <div class="flex between" style="padding:5px 0"><span class="small">${t("platformFee")} (${feeRateText()})</span><b class="text-danger">− ${money(fee)}</b></div>
+                <div class="flex between" style="padding:5px 0;border-top:1px dashed var(--line);margin-top:4px"><span class="small">${t("merchantReceives")}</span><b class="text-success">${money(merchantGets)}</b></div>
+              </div>
+            </div>
             <button class="btn btn-primary btn-lg btn-block mt-16" data-pay>${t("payNow")} ${icon("arrowRight")}</button>
           </div>`);
         $("[data-pay]", body).addEventListener("click", async () => {
@@ -1156,7 +1256,7 @@
     draw();
   }
   function checkoutCard(inner) {
-    return `<div class="checkout-card"><div style="text-align:center;padding:14px 0 0"><span class="badge badge-green">🔒 ${t("zeroFee")}</span></div>${inner}</div>`;
+    return `<div class="checkout-card"><div style="text-align:center;padding:14px 0 0"><span class="badge badge-green">🔒 Secure · ${feeRateText()} ${t("platformFee")}</span></div>${inner}</div>`;
   }
 
   /* ================= boot ================= */

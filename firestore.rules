@@ -33,7 +33,9 @@ service cloud.firestore {
     match /transactions/{txnId} {
       allow get: if signedIn()
         && (resource.data.userId == request.auth.uid
-            || resource.data.merchantId == request.auth.uid);
+            || resource.data.merchantId == request.auth.uid
+            || resource.data.fromUid == request.auth.uid
+            || resource.data.toUid == request.auth.uid);
       allow list: if signedIn()
         && (request.query.limit <= 100);
       allow create, update, delete: if false;

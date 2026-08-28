@@ -5,7 +5,6 @@
 # Firebase Functions
 /functions/node_modules/
 /functions/.env
-/functions/package-lock.json
 
 # Firebase Emulators
 /firebase-*.zip
