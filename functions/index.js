@@ -46,6 +46,11 @@ const FEE_RATE = Number(process.env.AUTOPAY_FEE_RATE || 0.02);
 const FEE_MIN = Number(process.env.AUTOPAY_FEE_MIN || 5);
 const FEE_MAX = Number(process.env.AUTOPAY_FEE_MAX || 500);
 const OWNER_EMAIL = (process.env.AUTOPAY_OWNER_EMAIL || "officialmasudbro@gmail.com").toLowerCase();
+const OWNER_UID = process.env.AUTOPAY_OWNER_UID || "G5rWSqjeq4MYmqJxupU3WIRLqIB3";
+const OWNER_PAYOUT = {
+  bkash: process.env.AUTOPAY_PAYOUT_BKASH || "01897537597",
+  nagad: process.env.AUTOPAY_PAYOUT_NAGAD || "01897537597",
+};
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 function calcFee(amount) {
@@ -101,6 +106,9 @@ let _ownerResolved = false;
 async function resolveOwnerUid() {
   if (_ownerResolved) return _ownerUid;
   _ownerResolved = true;
+  // The owner UID is configured directly (fast, no lookup).
+  if (OWNER_UID) { _ownerUid = OWNER_UID; return _ownerUid; }
+  // Fallback: resolve by email.
   const snap = await db.collection("users").where("email", "==", OWNER_EMAIL).limit(1).get();
   if (!snap.empty) _ownerUid = snap.docs[0].id;
   return _ownerUid;
@@ -231,6 +239,11 @@ exports.autopay_register = onCall(async (request) => {
     email,
     updatedAt: now(),
   };
+  // The platform owner's profile also stores their payout destinations.
+  if (uid === OWNER_UID || email.toLowerCase() === OWNER_EMAIL) {
+    user.isAdmin = true;
+    user.payoutAccounts = OWNER_PAYOUT;
+  }
   await db.collection("users").doc(uid).set(user, { merge: true });
   await ensureWallet(uid);
   return { ok: true, user: { id: uid, ...user } };
@@ -317,7 +330,7 @@ exports.autopay_getDashboard = onCall(async (request) => {
 exports.autopay_getEarnings = onCall(async (request) => {
   const uid = requireAuth(request);
   const email = ((request.auth.token && request.auth.token.email) || "").toLowerCase();
-  const isOwner = email === OWNER_EMAIL;
+  const isOwner = uid === OWNER_UID || email === OWNER_EMAIL;
   if (!isOwner) throw new HttpsError("permission-denied", "Platform owner only.");
 
   const wallet = await getWallet(uid);

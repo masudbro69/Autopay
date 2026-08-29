@@ -74,13 +74,17 @@
     return round2(Math.min(Math.max(amt * (f.rate || 0), f.minFee || 0), f.maxFee || Infinity));
   }
 
-  const OWNER = () => (window.APP_CONFIG && window.APP_CONFIG.ownerEmail) || "";
+  const OWNER_EMAIL = () => (window.APP_CONFIG && window.APP_CONFIG.ownerEmail) || "";
+  const OWNER_UID = () => (window.APP_CONFIG && window.APP_CONFIG.ownerUid) || "";
+  const ownerWalletKey = () => OWNER_UID() || OWNER_EMAIL();
 
   function ensureWallet(id) { if (!db.wallets[id]) db.wallets[id] = { balance: 0, currency: "BDT" }; }
   function isOwner(u) {
-    if (!OWNER() || !u) return false;
+    if (!u) return false;
+    if (OWNER_UID() && u === OWNER_UID()) return true;
+    if (!OWNER_EMAIL()) return false;
     const prof = db.users[u] || Object.values(db.users).find((x) => x.id === u);
-    return !!(prof && String(prof.email || "").toLowerCase() === OWNER().toLowerCase());
+    return !!(prof && String(prof.email || "").toLowerCase() === OWNER_EMAIL().toLowerCase());
   }
 
   /* ---------------- backend helpers ---------------- */
@@ -117,7 +121,7 @@
     let fee = 0, feeTxn = null;
     if (opts.collectFee && amt > 0) {
       fee = calcFee(amt);
-      const ownerWallet = OWNER();
+      const ownerWallet = ownerWalletKey();
       if (fee > 0 && ownerWallet && toUid !== ownerWallet && fromUid !== ownerWallet) {
         ensureWallet(ownerWallet);
         db.wallets[ownerWallet].balance = round2(db.wallets[ownerWallet].balance + fee);
@@ -301,7 +305,7 @@
     async getEarnings() {
       const u = requireUid();
       if (!isOwner(u)) { const e = new Error("permission-denied"); e.code = "permission-denied"; throw e; }
-      const ownerWallet = OWNER();
+      const ownerWallet = ownerWalletKey();
       const fees = db.transactions.filter((t) => t.type === "fee" && t.toUid === ownerWallet);
       const total = round2(fees.reduce((s, t) => s + t.amount, 0));
       return { ok: true, isOwner: true, stats: { totalFees: total, feeCount: fees.length, balance: round2(db.wallets[ownerWallet]?.balance || 0) }, fees: fees.slice(0, 50) };

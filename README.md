@@ -15,10 +15,15 @@ Every payment / invoice / subscription charge collects a transparent platform fe
 | Fee rate | **2%** | `AUTOPAY_FEE_RATE` |
 | Minimum fee | **৳5** | `AUTOPAY_FEE_MIN` |
 | Maximum fee | **৳500** | `AUTOPAY_FEE_MAX` |
+| Owner UID | `G5rWSqjeq4MYmqJxupU3WIRLqIB3` | `AUTOPAY_OWNER_UID` |
 | Owner email | `officialmasudbro@gmail.com` | `AUTOPAY_OWNER_EMAIL` |
+| Owner payout | bKash/Nagad `01897537597` | `AUTOPAY_PAYOUT_BKASH` / `AUTOPAY_PAYOUT_NAGAD` |
 
 - The **buyer pays the full amount**, the **merchant receives (amount − fee)**, and the **fee settles into the platform owner's wallet** — atomically, in one Firestore transaction.
-- Sign in with the **owner email** to unlock the **Earnings (আয়)** dashboard — total fee revenue, fee count, platform balance, and a live fee ledger.
+- Sign in with the **owner email (`officialmasudbro@gmail.com`)** — matched by UID `G5rWSqjeq4MYmqJxupU3WIRLqIB3` — to unlock the **Earnings (আয়)** dashboard: total fee revenue, fee count, platform balance, a live fee ledger, and your payout accounts.
+- Your earnings are withdrawn to your **personal bKash/Nagad number `01897537597`**.
+
+> ⚠️ **Personal vs merchant MFS:** a personal bKash/Nagad number **receives money** (payouts / Send Money). To **charge customers** at checkout (bKash/Nagad as a payment method), you need a **merchant** account with API credentials — see `functions/lib/gateways.js` for the integration points.
 - Optional pricing tiers are shown on the landing page (Growth 1.5% / Scale 1% as paid plans) for future monetization.
 
 ## 🔐 Authentication

@@ -30,10 +30,21 @@ window.APP_CONFIG = {
   },
 
   // ---- Owner / earnings ----
-  // Sign in with this email (Google) to unlock the "Earnings" dashboard
-  // (platform revenue). In Cloud Functions, also set AUTOPAY_OWNER_EMAIL
-  // to the same address (deploy.sh does this automatically).
+  // The platform owner unlocks the "Earnings" (আয়) dashboard. Both the
+  // Firebase UID and the email are matched. Cloud Functions mirrors these
+  // via AUTOPAY_OWNER_UID / AUTOPAY_OWNER_EMAIL.
+  ownerUid: "G5rWSqjeq4MYmqJxupU3WIRLqIB3",
   ownerEmail: "officialmasudbro@gmail.com",
+
+  // ---- Owner payout destination ----
+  // Where the owner's earnings are withdrawn (personal bKash/Nagad number).
+  // NOTE: a personal MFS number receives money (Send Money / payout). To
+  // *charge* customers via bKash/Nagad checkout you need a merchant
+  // account + API credentials (see functions/lib/gateways.js).
+  ownerPayout: {
+    bkash: "01897537597",
+    nagad: "01897537597"
+  },
 
   // ---- Runtime mode ----
   // "auto" → Firebase Hosting (*.web.app / *.firebaseapp.com) runs LIVE

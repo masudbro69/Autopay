@@ -1093,6 +1093,22 @@
     }));
   }
 
+  function ownerPayoutHtml() {
+    const po = (window.APP_CONFIG && window.APP_CONFIG.ownerPayout) || {};
+    const rows = Object.keys(po).map((m) => `
+      <div class="flex between" style="padding:10px 0;border-bottom:1px solid var(--line)">
+        <span class="flex gap-8"><span class="pm-ico" style="width:34px;height:34px;border-radius:9px;background:${gwColor(m)};color:#fff;font-weight:800;font-size:12px">${gwShort(m)}</span><b>${gwLabel(m)}</b></span>
+        <b class="mono">${esc(po[m])}</b>
+      </div>`).join("");
+    return `
+      <div class="card card-pad">
+        <h3 class="card-title">${t("payoutAccounts")}</h3>
+        <p class="card-sub">${t("ownerPayoutNote")}</p>
+        <div class="mt-8">${rows || `<div class="small muted">—</div>`}</div>
+        <p class="small muted mt-8">${t("personalAcctNote")}</p>
+      </div>`;
+  }
+
   /* ---------- earnings (platform owner) ---------- */
   async function viewEarnings() {
     let data = state.earnings;
@@ -1106,7 +1122,7 @@
     const fees = data.fees || [];
     const rows = fees.length ? fees.map((fx) => {
       const me = state.user.uid;
-      const incoming = fx.toUid === me;
+      const incoming = fx.toUid === me || (fx.toUid === (window.APP_CONFIG && window.APP_CONFIG.ownerUid));
       return `<tr>
         <td>${fmtDateTime(fx.createdAt)}</td>
         <td>${esc(fx.description || t("platformFee"))}</td>
@@ -1123,11 +1139,14 @@
         <div class="stat tone-amber"><div class="flex between"><span class="s-label">${t("feeBalance")}</span><span class="s-ico">${icon("wallet")}</span></div><div class="s-value">${money(stats.balance || 0)}</div><div class="s-sub">${t("wallet")} · BDT</div></div>
         <div class="stat tone-red"><div class="flex between"><span class="s-label">${t("feeRateLabel")}</span><span class="s-ico">${icon("chart")}</span></div><div class="s-value">${feeRateText()}</div><div class="s-sub">${t("platformFee")}</div></div>
       </div>
-      <div class="card card-pad">
-        <h3 class="card-title">${t("feeTxns")}</h3>
-        <div class="table-wrap mt-16"><table class="tbl">
-          <thead><tr><th>${t("date")}</th><th>${t("description")}</th><th>${t("counterparty")}</th><th class="tar">${t("amount")}</th></tr></thead>
-          <tbody>${rows}</tbody></table></div>
+      <div class="grid-2b">
+        <div class="card card-pad">
+          <h3 class="card-title">${t("feeTxns")}</h3>
+          <div class="table-wrap mt-16"><table class="tbl">
+            <thead><tr><th>${t("date")}</th><th>${t("description")}</th><th>${t("counterparty")}</th><th class="tar">${t("amount")}</th></tr></thead>
+            <tbody>${rows}</tbody></table></div>
+        </div>
+        ${ownerPayoutHtml()}
       </div>`;
   }
   function bindEarnings() {}
@@ -1160,6 +1179,7 @@
           <p class="card-sub">${t("apiKeyHint")}</p>
           <div class="copy-field mt-16"><input class="input mono" readonly value="${esc(apiKey)}"><button class="btn btn-outline" data-copy="${esc(apiKey)}">${icon("copy", 15)}</button></div>
         </div>
+        ${isOwner() ? ownerPayoutHtml() : ""}
       </div>`;
   }
   function bindSettings() {
