@@ -58,6 +58,8 @@ function calcFee(amount) {
   if (amt <= 0) return 0;
   return round2(Math.min(Math.max(amt * FEE_RATE, FEE_MIN), FEE_MAX));
 }
+const msOf = (v) => (v && v.toMillis ? v.toMillis() : (v instanceof Date ? v.getTime() : Number(v) || 0));
+const sortDesc = (arr) => arr.sort((a, b) => msOf(b.createdAt) - msOf(a.createdAt));
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -301,17 +303,16 @@ exports.autopay_getDashboard = onCall(async (request) => {
   const user = (await getUser(uid)) || { role: "customer" };
   const wallet = await getWallet(uid);
 
-  const paid = await db
-    .collection("transactions")
-    .where("fromUid", "==", uid)
-    .get();
-  const received = await db
-    .collection("transactions")
-    .where("toUid", "==", uid)
-    .get();
+  const [paid, received] = await Promise.all([
+    db.collection("transactions").where("fromUid", "==", uid).get(),
+    db.collection("transactions").where("toUid", "==", uid).get(),
+  ]);
 
-  const totalPaid = paid.docs.reduce((s, d) => s + (d.data().amount || 0), 0);
-  const totalReceived = received.docs.reduce((s, d) => s + (d.data().amount || 0), 0);
+  const paidDocs = sortDesc(paid.docs.map((d) => ({ id: d.id, ...d.data() })));
+  const receivedDocs = sortDesc(received.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+  const totalPaid = paidDocs.reduce((s, d) => s + (d.amount || 0), 0);
+  const totalReceived = receivedDocs.reduce((s, d) => s + (d.amount || 0), 0);
 
   return {
     ok: true,
@@ -323,7 +324,7 @@ exports.autopay_getDashboard = onCall(async (request) => {
       totalPaid: round2(totalPaid),
       feeCollected: 0,
     },
-    recent: paid.docs.slice(0, 10).map((d) => ({ id: d.id, ...d.data() })),
+    recent: paidDocs.slice(0, 12),
   };
 });
 
@@ -334,20 +335,40 @@ exports.autopay_getEarnings = onCall(async (request) => {
   if (!isOwner) throw new HttpsError("permission-denied", "Platform owner only.");
 
   const wallet = await getWallet(uid);
-  const allFees = await db.collection("transactions").where("type", "==", "fee").get();
-  const recent = await db
-    .collection("transactions")
-    .where("type", "==", "fee")
-    .orderBy("createdAt", "desc")
-    .limit(50)
-    .get();
 
-  const totalFees = round2(allFees.docs.reduce((s, d) => s + (d.data().amount || 0), 0));
+  // Equality-only queries (no composite index required) → robust on deploy.
+  const feeSnap = await db.collection("transactions").where("type", "==", "fee").get();
+  const fees = sortDesc(feeSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  const totalFees = round2(fees.reduce((s, t) => s + (t.amount || 0), 0));
+
+  const [usersSnap, merchantsSnap, txnsSnap, payoutsSnap] = await Promise.all([
+    db.collection("users").get(),
+    db.collection("users").where("role", "==", "merchant").get(),
+    db.collection("transactions").get(),
+    db.collection("payouts").where("status", "==", "processing").get(),
+  ]);
+
+  const totalVolume = round2(
+    txnsSnap.docs.reduce((s, d) => {
+      const t = d.data();
+      if (t.type === "topup" || t.type === "fee") return s;
+      return s + (t.amount || 0);
+    }, 0)
+  );
+
   return {
     ok: true,
     isOwner: true,
-    stats: { totalFees, feeCount: allFees.size, balance: round2(wallet.balance || 0) },
-    fees: recent.docs.map((d) => ({ id: d.id, ...d.data() })),
+    stats: {
+      totalFees,
+      feeCount: fees.length,
+      balance: round2(wallet.balance || 0),
+      totalVolume,
+      users: usersSnap.size,
+      merchants: merchantsSnap.size,
+      pendingPayouts: payoutsSnap.size,
+    },
+    fees: fees.slice(0, 50),
   };
 });
 
@@ -422,13 +443,8 @@ exports.autopay_payLink = onCall(async (request) => {
 
 exports.autopay_listLinks = onCall(async (request) => {
   const uid = requireAuth(request);
-  const snap = await db
-    .collection("paymentLinks")
-    .where("merchantId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(200)
-    .get();
-  return { ok: true, links: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  const snap = await db.collection("paymentLinks").where("merchantId", "==", uid).get();
+  return { ok: true, links: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
 
 /* ------------------------------------------------------------------ */
@@ -483,13 +499,8 @@ exports.autopay_payInvoice = onCall(async (request) => {
 
 exports.autopay_listInvoices = onCall(async (request) => {
   const uid = requireAuth(request);
-  const snap = await db
-    .collection("invoices")
-    .where("merchantId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(200)
-    .get();
-  return { ok: true, invoices: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  const snap = await db.collection("invoices").where("merchantId", "==", uid).get();
+  return { ok: true, invoices: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
 
 /* ------------------------------------------------------------------ */
@@ -517,13 +528,8 @@ exports.autopay_createPlan = onCall(async (request) => {
 
 exports.autopay_listPlans = onCall(async (request) => {
   const uid = requireAuth(request);
-  const snap = await db
-    .collection("plans")
-    .where("merchantId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(200)
-    .get();
-  return { ok: true, plans: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  const snap = await db.collection("plans").where("merchantId", "==", uid).get();
+  return { ok: true, plans: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
 
 function nextChargeDate(interval, from = new Date()) {
@@ -578,24 +584,14 @@ exports.autopay_cancelSubscription = onCall(async (request) => {
 
 exports.autopay_listSubscriptions = onCall(async (request) => {
   const uid = requireAuth(request);
-  const snap = await db
-    .collection("subscriptions")
-    .where("customerId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(200)
-    .get();
-  return { ok: true, subscriptions: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  const snap = await db.collection("subscriptions").where("customerId", "==", uid).get();
+  return { ok: true, subscriptions: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
 
 exports.autopay_listMerchantSubscriptions = onCall(async (request) => {
   const uid = requireAuth(request);
-  const snap = await db
-    .collection("subscriptions")
-    .where("merchantId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(200)
-    .get();
-  return { ok: true, subscriptions: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  const snap = await db.collection("subscriptions").where("merchantId", "==", uid).get();
+  return { ok: true, subscriptions: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
 
 /**
@@ -603,14 +599,16 @@ exports.autopay_listMerchantSubscriptions = onCall(async (request) => {
  * the hourly scheduled processor.
  */
 async function processDueSubscriptions() {
-  const due = await db
-    .collection("subscriptions")
-    .where("status", "==", "active")
-    .where("nextChargeAt", "<=", now())
-    .get();
+  // Equality-only query + in-memory filter (no composite index required).
+  const active = await db.collection("subscriptions").where("status", "==", "active").get();
+  const cutoff = Date.now();
+  const due = active.docs.filter((d) => {
+    const n = d.data().nextChargeAt;
+    return n && msOf(n) <= cutoff;
+  });
 
   const results = [];
-  for (const doc of due.docs) {
+  for (const doc of due) {
     const sub = { id: doc.id, ...doc.data() };
     try {
       let txn;
@@ -687,13 +685,8 @@ exports.autopay_requestPayout = onCall(async (request) => {
 
 exports.autopay_listPayouts = onCall(async (request) => {
   const uid = requireAuth(request);
-  const snap = await db
-    .collection("payouts")
-    .where("merchantId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(200)
-    .get();
-  return { ok: true, payouts: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  const snap = await db.collection("payouts").where("merchantId", "==", uid).get();
+  return { ok: true, payouts: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
 
 /* ------------------------------------------------------------------ */
@@ -706,28 +699,20 @@ exports.autopay_listTransactions = onCall(async (request) => {
   const cap = Math.min(Number(limit) || 100, 200);
 
   const [out, incoming] = await Promise.all([
-    db.collection("transactions").where("fromUid", "==", uid).orderBy("createdAt", "desc").limit(cap).get(),
-    db.collection("transactions").where("toUid", "==", uid).orderBy("createdAt", "desc").limit(cap).get(),
+    db.collection("transactions").where("fromUid", "==", uid).get(),
+    db.collection("transactions").where("toUid", "==", uid).get(),
   ]);
 
   const merge = new Map();
   for (const d of [...out.docs, ...incoming.docs]) merge.set(d.id, { id: d.id, ...d.data() });
-  const list = [...merge.values()]
-    .filter((x) => x.fromUid === uid || x.toUid === uid)
-    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
-    .slice(0, cap);
+  const list = sortDesc([...merge.values()]).slice(0, cap);
 
   return { ok: true, transactions: list };
 });
 
 exports.autopay_listCustomers = onCall(async (request) => {
   const uid = requireAuth(request);
-  const paid = await db
-    .collection("transactions")
-    .where("toUid", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(200)
-    .get();
+  const paid = await db.collection("transactions").where("toUid", "==", uid).get();
 
   const byCustomer = new Map();
   paid.docs.forEach((d) => {

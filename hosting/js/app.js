@@ -222,15 +222,23 @@
                   <div class="hs"><b>${t("statInstantV")}</b><span>${t("statInstant")}</span></div>
                 </div>
               </div>
-              <div class="phone-mock">
-                <div class="pm-head"><span class="logo" style="font-size:15px">${logoMark(28)} Autopay</span><span class="badge badge-green"><span class="dot"></span>${t("liveNotice")}</span></div>
-                <div class="pm-balance"><small>${t("dashBalance")}</small><b>${money(0)}</b>
-                  <div class="flex between small" style="opacity:.9"><span>${t("wallet")} · BDT</span><span>${t("feeRateLabel")} ${feeRateText()}</span></div>
+              <div class="hero-visual">
+                <div class="coin-stage" aria-hidden="true">
+                  <div class="ring"></div>
+                  <div class="ring r2"></div>
+                  <div class="coin"><div class="face">৳</div><div class="face back">৳</div></div>
+                  ${["bkash", "nagad", "rocket", "upay", "card"].map((m, i) => `<span class="coin-chip" style="--a:${i * 72}deg;--d:${(i * 0.9).toFixed(1)}s"><span class="cc" style="background:${gwColor(m)}">${gwShort(m)}</span><span>${t("statInstantV")}</span></span>`).join("")}
                 </div>
-                <div class="mt-8">
-                  ${pmRow("bkash", "bKash", "bKash", t("statusActive"), "—")}
-                  ${pmRow("nagad", "Nagad", "Nagad", t("statusActive"), "—")}
-                  ${pmRow("card", "VC", "Visa/Mastercard", t("statusActive"), "—")}
+                <div class="phone-mock">
+                  <div class="pm-head"><span class="logo" style="font-size:15px">${logoMark(28)} Autopay</span><span class="badge badge-green"><span class="dot"></span>${t("liveNotice")}</span></div>
+                  <div class="pm-balance"><small>${t("dashBalance")}</small><b>${money(0)}</b>
+                    <div class="flex between small" style="opacity:.9"><span>${t("wallet")} · BDT</span><span>${t("feeRateLabel")} ${feeRateText()}</span></div>
+                  </div>
+                  <div class="mt-8">
+                    ${pmRow("bkash", "bKash", "bKash", t("statusActive"), "—")}
+                    ${pmRow("nagad", "Nagad", "Nagad", t("statusActive"), "—")}
+                    ${pmRow("card", "VC", "Visa/Mastercard", t("statusActive"), "—")}
+                  </div>
                 </div>
               </div>
             </div>
@@ -407,6 +415,7 @@
       state.isOwner = !!(er && er.isOwner);
       state.earnings = er;
     } catch (e) { state.isOwner = false; }
+    state.profileLoaded = true;
   }
 
   function isOwner() { return !!state.isOwner; }
@@ -493,7 +502,8 @@
     $$("[data-close-sidebar]").forEach((b) => b.addEventListener("click", () => $("#sidebar").classList.remove("open")));
     $$("[data-logout]").forEach((b) => b.addEventListener("click", async () => {
       await window.API.auth.signOut();
-      state.user = null; state.profile = null;
+      state.user = null; state.profile = null; state.profileLoaded = false;
+      state.isOwner = false; state.earnings = null; state.wallet = { balance: 0 };
       goto("#/");
     }));
     $$(".sidebar .nav-item").forEach((a) => a.addEventListener("click", () => $("#sidebar").classList.remove("open")));
@@ -501,6 +511,9 @@
 
   /* ================= VIEWS ================= */
   async function renderApp() {
+    // Load profile + owner status on first entry (fixes merchant/admin nav
+    // after a page reload or a direct sign-in via the API).
+    if (!state.profileLoaded) await loadProfile();
     let body = `<div class="empty">${t("loading")}</div>`;
     $("#app").innerHTML = shell(body);
     bindShell();
@@ -1285,7 +1298,10 @@
     window.addEventListener("hashchange", render);
     window.API.auth.onAuthChange((u) => {
       state.user = u;
-      if (!u) { state.profile = null; state.wallet = { balance: 0 }; }
+      if (!u) {
+        state.profile = null; state.profileLoaded = false;
+        state.isOwner = false; state.earnings = null; state.wallet = { balance: 0 };
+      }
       render();
     });
     render();
