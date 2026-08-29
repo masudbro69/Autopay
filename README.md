@@ -15,7 +15,7 @@ Every payment / invoice / subscription charge collects a transparent platform fe
 | Fee rate | **2%** | `AUTOPAY_FEE_RATE` |
 | Minimum fee | **৳5** | `AUTOPAY_FEE_MIN` |
 | Maximum fee | **৳500** | `AUTOPAY_FEE_MAX` |
-| Owner email | `owner@autopay.bd` | `AUTOPAY_OWNER_EMAIL` |
+| Owner email | `officialmasudbro@gmail.com` | `AUTOPAY_OWNER_EMAIL` |
 
 - The **buyer pays the full amount**, the **merchant receives (amount − fee)**, and the **fee settles into the platform owner's wallet** — atomically, in one Firestore transaction.
 - Sign in with the **owner email** to unlock the **Earnings (আয়)** dashboard — total fee revenue, fee count, platform balance, and a live fee ledger.

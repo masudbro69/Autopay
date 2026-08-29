@@ -30,9 +30,10 @@ window.APP_CONFIG = {
   },
 
   // ---- Owner / earnings ----
-  // Set this to your own login email to unlock the "Earnings" dashboard
-  // (platform revenue). In Cloud Functions, also set AUTOPAY_OWNER_EMAIL.
-  ownerEmail: "owner@autopay.bd",
+  // Sign in with this email (Google) to unlock the "Earnings" dashboard
+  // (platform revenue). In Cloud Functions, also set AUTOPAY_OWNER_EMAIL
+  // to the same address (deploy.sh does this automatically).
+  ownerEmail: "officialmasudbro@gmail.com",
 
   // ---- Runtime mode ----
   // "auto" → Firebase Hosting (*.web.app / *.firebaseapp.com) runs LIVE

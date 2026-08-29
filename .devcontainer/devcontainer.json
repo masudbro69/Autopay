@@ -1,0 +1,20 @@
+{
+  "name": "Autopay — Firebase dev container",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "forwardPorts": [8080, 5000, 5001, 9099, 9199],
+  "portsAttributes": {
+    "5000": { "label": "Firebase Hosting emulator", "onAutoForward": "silent" },
+    "5001": { "label": "Firebase Functions emulator", "onAutoForward": "silent" },
+    "8080": { "label": "Static preview", "onAutoForward": "silent" },
+    "9099": { "label": "Firebase Auth emulator", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "npm i -g firebase-tools && npm ci --prefix functions && echo '' && echo '✅ Autopay environment ready.' && echo '   → firebase login' && echo '   → ./deploy.sh'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

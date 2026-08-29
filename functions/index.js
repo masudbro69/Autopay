@@ -45,7 +45,7 @@ const db = getFirestore();
 const FEE_RATE = Number(process.env.AUTOPAY_FEE_RATE || 0.02);
 const FEE_MIN = Number(process.env.AUTOPAY_FEE_MIN || 5);
 const FEE_MAX = Number(process.env.AUTOPAY_FEE_MAX || 500);
-const OWNER_EMAIL = (process.env.AUTOPAY_OWNER_EMAIL || "owner@autopay.bd").toLowerCase();
+const OWNER_EMAIL = (process.env.AUTOPAY_OWNER_EMAIL || "officialmasudbro@gmail.com").toLowerCase();
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 function calcFee(amount) {
