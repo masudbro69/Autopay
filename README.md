@@ -99,7 +99,7 @@ hosting/js/config.js      → Firebase web config + fee/owner config (public)
 hosting/js/backend.js     → LIVE (Firebase Auth/Firestore/Functions) ⇄ sandbox fallback
 hosting/js/sandbox.js     → dev-only, starts EMPTY (no fake data), same fee math
 hosting/js/app.js         → router + all views (dashboard, wallet, links, earnings, …)
-functions/index.js        → callable API + fee engine + hourly auto-pay scheduler
+functions/index.js        → callable API (v1) + fee engine + optional hourly auto-pay scheduler
 functions/lib/gateways.js → bKash/Nagad/Rocket/Upay/card adapter layer
 firestore.rules           → ownership-locked security rules
 ```
@@ -122,7 +122,9 @@ Force a mode with `?mode=live` or `?mode=sandbox`.
 `autopay_createInvoice` / `autopay_payInvoice` / `autopay_listInvoices` ·
 `autopay_createPlan` / `autopay_listPlans` · `autopay_createSubscription` / `autopay_cancelSubscription` / `autopay_listSubscriptions` / `autopay_listMerchantSubscriptions` ·
 `autopay_requestPayout` / `autopay_listPayouts` · `autopay_listTransactions` / `autopay_listCustomers` ·
-`autopay_processDueSubscriptions` (manual) + scheduled `autopay_processDueSubscriptionsScheduled` (hourly).
+`autopay_processDueSubscriptions` (manual) + scheduled `autopay_processDueSubscriptionsScheduled` (hourly, only when `AUTOPAY_ENABLE_SCHEDULER=1`).
+
+> ✅ **Free-plan friendly:** the backend uses the **v1 Functions API**, which deploys and runs on the **Spark (free) plan** — no Blaze/billing needed for the callable API. Only the *scheduled* auto-charge runner needs Blaze (Cloud Scheduler), and it's optional (the dashboard "Run due charges" button does the same job on demand). If every backend call shows **"INTERNAL"**, the functions aren't deployed yet — run `firebase login && ./deploy.sh`.
 
 ## 🛡️ Security
 

@@ -6,6 +6,9 @@
 /functions/node_modules/
 /functions/.env
 
+# Local test harness dependencies
+/test/node_modules/
+
 # Firebase Emulators
 /firebase-*.zip
 /.firebase/

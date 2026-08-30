@@ -30,17 +30,29 @@
 
   function errMsg(e) {
     const code = e && e.code;
-    if (code === "insufficient-funds") return t("insufficientFunds");
-    if (code === "otp-required") return t("otpRequired");
-    if (code === "not-found") return t("notFound");
-    if (code === "link-inactive") return t("payAlreadyPaid");
-    if (code === "link-expired") return t("payExpired");
-    if (code === "invalid-credentials") return t("invalidCreds");
-    if (code === "email-exists") return t("emailExists");
-    if (code === "permission-denied") return t("permissionDenied");
-    if (code === "google-unavailable") return t("googleUnavailable");
-    if (code === "functions/not-found" || code === "internal" || code === "unavailable") return t("backendNotDeployed");
-    return (e && e.message) || "Error";
+    switch (code) {
+      case "insufficient-funds": return t("insufficientFunds");
+      case "otp-required": return t("otpRequired");
+      case "not-found": return t("notFound");
+      case "link-inactive": return t("payAlreadyPaid");
+      case "link-expired": return t("payExpired");
+      case "invalid-credentials": return t("invalidCreds");
+      case "email-exists": return t("emailExists");
+      case "permission-denied": return t("permissionDenied");
+      case "google-unavailable": return t("googleUnavailable");
+      case "unauthenticated": return t("sessionExpired");
+      case "invalid-argument": return t("invalidInput");
+      case "failed-precondition": return t("actionNotAllowed");
+      case "functions/not-found": case "internal": case "unavailable":
+      case "deadline-exceeded": case "resource-exhausted":
+        return t("backendNotDeployed");
+      default:
+        // Only surface a human-readable message; never leak a raw
+        // "INTERNAL" or stack trace to the user.
+        return (e && typeof e.message === "string" && e.message.length && e.message !== "INTERNAL" && e.message !== "Internal error.")
+          ? e.message
+          : t("somethingWrong");
+    }
   }
 
   function initials(name) {
@@ -367,7 +379,7 @@
         if (code === "auth/popup-blocked") toast(t("popupBlocked"), "err");
         else if (code === "auth/popup-closed-by-user") { /* silent */ }
         else if (code === "google-unavailable") toast(t("googleUnavailable"), "err");
-        else toast((err && err.message) || "Error", "err");
+        else toast(errMsg(err), "err");
       } finally { b.disabled = false; }
     }));
     const form = $("[data-auth-form]");
@@ -390,8 +402,7 @@
         }
         await finishAuth();
       } catch (err) {
-        const code = err && err.code;
-        toast(code === "invalid-credentials" ? t("invalidCreds") : code === "email-exists" ? t("emailExists") : (err && err.message) || "Error", "err");
+        toast(errMsg(err), "err");
       } finally { btn.disabled = false; }
     });
   }
@@ -533,7 +544,7 @@
         default: body = await viewOverview();
       }
     } catch (e) {
-      body = `<div class="empty"><div class="e-ico">${icon("x", 30)}</div>${esc(e.message || "Error")}</div>`;
+      body = `<div class="empty"><div class="e-ico">${icon("x", 30)}</div>${esc(errMsg(e))}</div>`;
     }
     $("#app").innerHTML = shell(body);
     bindShell();
@@ -1101,7 +1112,7 @@
         try {
           await window.API.backend.requestPayout({ amount, method: $("[data-method]").value, account: $("[data-account]").value });
           closeModal(); toast(t("payoutDone")); render();
-        } catch (e) { toast(e.message || "Error", "err"); }
+        } catch (e) { toast(errMsg(e), "err"); }
       });
     }));
   }

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================
 # Autopay — one-command live deployment
-# Deploys Firestore rules + indexes, Cloud Functions, and Hosting
-# to your Firebase project (auto-pay-66e8c).
+# Deploys Firestore rules + indexes, Cloud Functions (v1), and
+# Hosting to your Firebase project (auto-pay-66e8c).
 #
 # Run from a GitHub Codespace or any machine with Node installed:
 #   chmod +x deploy.sh
@@ -11,8 +11,14 @@
 # Requirements:
 #   1. Firebase CLI (auto-installed below)
 #   2. firebase login  (interactive — opens a browser / gives a URL)
-#   3. The project must be on the Blaze (pay-as-you-go) plan to run
-#      Cloud Functions & the scheduled auto-pay processor.
+#
+# Backend compatibility:
+#   - Cloud Functions are written against the v1 API, which runs on
+#     the FREE Spark plan as well as Blaze. You do NOT need Blaze to
+#     deploy or call these functions.
+#   - The scheduled auto-pay processor is OPTIONAL and only registered
+#     when AUTOPAY_ENABLE_SCHEDULER=1 (Cloud Scheduler requires Blaze).
+#     Without it, the dashboard "Run due charges" button still works.
 # ============================================================
 set -euo pipefail
 
@@ -25,32 +31,37 @@ else
   FB=(npx --yes "$FB_SPEC")
 fi
 
-echo "==> 1/6  Checking Firebase CLI"
+echo "==> 1/7  Checking Firebase CLI"
 "${FB[@]}" --version
 
-echo "==> 2/6  Login"
+echo "==> 2/7  Login"
 "${FB[@]}" login
 
-echo "==> 3/6  Selecting project: $PROJECT"
+echo "==> 3/7  Selecting project: $PROJECT"
 "${FB[@]}" use "$PROJECT"
 
-echo "==> 4/6  Owner email (unlocks the Earnings / আয় dashboard)"
+echo "==> 4/7  Owner email (unlocks the Earnings / আয় dashboard)"
 if [ -n "${AUTOPAY_OWNER_EMAIL:-}" ]; then
   OWNER="$AUTOPAY_OWNER_EMAIL"
 else
   read -rp "Your owner email (default: officialmasudbro@gmail.com): " OWNER
   OWNER="${OWNER:-officialmasudbro@gmail.com}"
 fi
+# The backend already defaults to officialmasudbro@gmail.com and the owner
+# UID G5rWSqjeq4MYmqJxupU3WIRLqIB3, so this step is optional.
 if [ -n "$OWNER" ]; then
-  printf '%s' "$OWNER" | "${FB[@]}" functions:secrets:set AUTOPAY_OWNER_EMAIL || \
-    echo "   ⚠️  Could not set AUTOPAY_OWNER_EMAIL (needs Blaze plan). Set it later."
+  printf '%s' "$OWNER" | "${FB[@]}" functions:config:set autopay.owner_email="$OWNER" --project "$PROJECT" >/dev/null 2>&1 || \
+    echo "   ⚠️  Could not persist owner email (works without it — backend default used)."
 fi
 
-echo "==> 5/6  Deploy Firestore rules + indexes"
+echo "==> 5/7  Deploy Firestore rules + indexes"
 "${FB[@]}" deploy --only firestore:rules,firestore:indexes --project "$PROJECT"
 
-echo "==> 6/6  Deploy Functions + Hosting"
-"${FB[@]}" deploy --only functions,hosting --project "$PROJECT"
+echo "==> 6/7  Deploy Cloud Functions (v1 — works on Spark or Blaze)"
+"${FB[@]}" deploy --only functions --project "$PROJECT"
+
+echo "==> 7/7  Deploy Hosting (the luxury UI)"
+"${FB[@]}" deploy --only hosting --project "$PROJECT"
 
 echo ""
 echo "============================================================="
@@ -60,5 +71,6 @@ echo "Post-deploy checklist:"
 echo "  • Authentication → Sign-in method → Google ✅ (enable)"
 echo "  • Authentication → Settings → Authorized domains → add:"
 echo "      $PROJECT.web.app, $PROJECT.firebaseapp.com"
-echo "  • Blaze plan required (Functions + scheduled auto-pay)"
+echo "  • (Optional) Blaze plan → then enable auto-charge scheduler:"
+echo "      AUTOPAY_ENABLE_SCHEDULER=1 ./deploy.sh"
 echo "============================================================="

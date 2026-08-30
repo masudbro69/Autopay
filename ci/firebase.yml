@@ -1,8 +1,9 @@
 name: Deploy to Firebase (live)
 
-# Deploys Firestore rules + Cloud Functions + Hosting to your real
-# Firebase project (auto-pay-66e8c). Runs automatically on every push to
-# the tracked branch once the FIREBASE_TOKEN secret is configured.
+# Deploys Firestore rules + Cloud Functions (v1 — runs on the free Spark
+# plan) + Hosting to your real Firebase project (auto-pay-66e8c). Runs
+# automatically on every push to the tracked branch once the FIREBASE_TOKEN
+# secret is configured.
 #
 # To generate the token locally:
 #   npm i -g firebase-tools && firebase login:ci

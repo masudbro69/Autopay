@@ -29,8 +29,9 @@
  *   autopay_processDueSubscriptions — charges due auto-pay subscriptions.
  */
 
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
+const functions = require("firebase-functions");
+const onCall = functions.https.onCall;
+const HttpsError = functions.https.HttpsError;
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const gateways = require("./lib/gateways");
@@ -229,10 +230,10 @@ async function recordEvent(payload) {
 /* Auth / profile                                                      */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_register = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { name = "", phone = "", company = "", role = "customer" } = request.data || {};
-  const email = (request.auth.token && request.auth.token.email) || "";
+exports.autopay_register = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { name = "", phone = "", company = "", role = "customer" } = data || {};
+  const email = (context.auth.token && context.auth.token.email) || "";
   const user = {
     name: String(name).slice(0, 120),
     phone: String(phone).slice(0, 20),
@@ -251,8 +252,8 @@ exports.autopay_register = onCall(async (request) => {
   return { ok: true, user: { id: uid, ...user } };
 });
 
-exports.autopay_getProfile = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_getProfile = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const user = await getUser(uid);
   const wallet = await getWallet(uid);
   return { ok: true, user, wallet };
@@ -262,9 +263,9 @@ exports.autopay_getProfile = onCall(async (request) => {
 /* Wallet top-up                                                       */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_topUp = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { method = "bkash", amount } = request.data || {};
+exports.autopay_topUp = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { method = "bkash", amount } = data || {};
   const amt = requireAmount(amount, { min: 50 });
 
   const created = await gateways.createPayment(method, { amount: amt, payerUid: uid });
@@ -273,14 +274,14 @@ exports.autopay_topUp = onCall(async (request) => {
   return { ok: true, payment: created, amount: amt, fee: 0 };
 });
 
-exports.autopay_confirmTopUp = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { method = "bkash", paymentId, otp } = request.data || {};
+exports.autopay_confirmTopUp = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { method = "bkash", paymentId, otp } = data || {};
   if (!paymentId) throw new HttpsError("invalid-argument", "Missing paymentId.");
 
   const result = await gateways.executePayment(method, paymentId, otp);
 
-  const amount = round2(Number(request.data.amount));
+  const amount = round2(Number(data.amount));
   const txn = await credit({
     toUid: uid,
     amount,
@@ -298,8 +299,8 @@ exports.autopay_confirmTopUp = onCall(async (request) => {
 /* Dashboard & earnings                                                */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_getDashboard = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_getDashboard = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const user = (await getUser(uid)) || { role: "customer" };
   const wallet = await getWallet(uid);
 
@@ -328,9 +329,9 @@ exports.autopay_getDashboard = onCall(async (request) => {
   };
 });
 
-exports.autopay_getEarnings = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const email = ((request.auth.token && request.auth.token.email) || "").toLowerCase();
+exports.autopay_getEarnings = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const email = ((context.auth.token && context.auth.token.email) || "").toLowerCase();
   const isOwner = uid === OWNER_UID || email === OWNER_EMAIL;
   if (!isOwner) throw new HttpsError("permission-denied", "Platform owner only.");
 
@@ -376,9 +377,9 @@ exports.autopay_getEarnings = onCall(async (request) => {
 /* Payment links (hosted checkout)                                     */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_createLink = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { amount, description = "", expiresInDays = 7, allowAutoPay = false } = request.data || {};
+exports.autopay_createLink = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { amount, description = "", expiresInDays = 7, allowAutoPay = false } = data || {};
   const amt = requireAmount(amount, { min: 1 });
 
   const linkRef = db.collection("paymentLinks").doc();
@@ -397,8 +398,8 @@ exports.autopay_createLink = onCall(async (request) => {
   return { ok: true, link };
 });
 
-exports.autopay_getLink = onCall(async (request) => {
-  const { linkId } = request.data || {};
+exports.autopay_getLink = onCall(async (data, context) => {
+  const { linkId } = data || {};
   if (!linkId) throw new HttpsError("invalid-argument", "Missing linkId.");
   const snap = await db.collection("paymentLinks").doc(linkId).get();
   if (!snap.exists) throw new HttpsError("not-found", "Payment link not found.");
@@ -407,9 +408,9 @@ exports.autopay_getLink = onCall(async (request) => {
   return { ok: true, link, merchant: merchant ? { name: merchant.name, company: merchant.company } : null };
 });
 
-exports.autopay_payLink = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { linkId, method = "wallet" } = request.data || {};
+exports.autopay_payLink = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { linkId, method = "wallet" } = data || {};
   if (!linkId) throw new HttpsError("invalid-argument", "Missing linkId.");
 
   const linkSnap = await db.collection("paymentLinks").doc(linkId).get();
@@ -428,7 +429,7 @@ exports.autopay_payLink = onCall(async (request) => {
       extra: { linkId, merchantId: link.merchantId },
     });
   } else {
-    await gateways.executePayment(method, request.data.paymentId, request.data.otp);
+    await gateways.executePayment(method, data.paymentId, data.otp);
     txn = await settleExternal({
       toUid: link.merchantId, payerUid: uid, amount: link.amount,
       type: "payment", method, description: link.description || `Payment for link ${linkId}`,
@@ -441,8 +442,8 @@ exports.autopay_payLink = onCall(async (request) => {
   return { ok: true, transaction: txn };
 });
 
-exports.autopay_listLinks = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_listLinks = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const snap = await db.collection("paymentLinks").where("merchantId", "==", uid).get();
   return { ok: true, links: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
@@ -451,9 +452,9 @@ exports.autopay_listLinks = onCall(async (request) => {
 /* Invoices                                                            */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_createInvoice = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { customerEmail = "", amount, description = "", dueDays = 7 } = request.data || {};
+exports.autopay_createInvoice = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { customerEmail = "", amount, description = "", dueDays = 7 } = data || {};
   const amt = requireAmount(amount, { min: 1 });
 
   const ref = db.collection("invoices").doc();
@@ -470,9 +471,9 @@ exports.autopay_createInvoice = onCall(async (request) => {
   return { ok: true, invoice };
 });
 
-exports.autopay_payInvoice = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { invoiceId, method = "wallet" } = request.data || {};
+exports.autopay_payInvoice = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { invoiceId, method = "wallet" } = data || {};
   const snap = await db.collection("invoices").doc(invoiceId).get();
   if (!snap.exists) throw new HttpsError("not-found", "Invoice not found.");
   const invoice = snap.data();
@@ -486,7 +487,7 @@ exports.autopay_payInvoice = onCall(async (request) => {
       extra: { invoiceId, merchantId: invoice.merchantId },
     });
   } else {
-    await gateways.executePayment(method, request.data.paymentId, request.data.otp);
+    await gateways.executePayment(method, data.paymentId, data.otp);
     txn = await settleExternal({
       toUid: invoice.merchantId, payerUid: uid, amount: invoice.amount,
       type: "invoice", method, description: invoice.description || `Invoice ${invoiceId}`,
@@ -497,8 +498,8 @@ exports.autopay_payInvoice = onCall(async (request) => {
   return { ok: true, transaction: txn };
 });
 
-exports.autopay_listInvoices = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_listInvoices = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const snap = await db.collection("invoices").where("merchantId", "==", uid).get();
   return { ok: true, invoices: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
@@ -507,9 +508,9 @@ exports.autopay_listInvoices = onCall(async (request) => {
 /* Auto-pay: plans & subscriptions                                     */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_createPlan = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { name = "", amount, interval = "monthly", description = "" } = request.data || {};
+exports.autopay_createPlan = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { name = "", amount, interval = "monthly", description = "" } = data || {};
   const amt = requireAmount(amount, { min: 1 });
   const valid = ["daily", "weekly", "monthly", "yearly"];
   if (!valid.includes(interval)) throw new HttpsError("invalid-argument", "Invalid interval.");
@@ -526,8 +527,8 @@ exports.autopay_createPlan = onCall(async (request) => {
   return { ok: true, plan };
 });
 
-exports.autopay_listPlans = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_listPlans = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const snap = await db.collection("plans").where("merchantId", "==", uid).get();
   return { ok: true, plans: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
@@ -544,9 +545,9 @@ function nextChargeDate(interval, from = new Date()) {
   return d;
 }
 
-exports.autopay_createSubscription = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { planId, method = "wallet" } = request.data || {};
+exports.autopay_createSubscription = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { planId, method = "wallet" } = data || {};
   const planSnap = await db.collection("plans").doc(planId).get();
   if (!planSnap.exists) throw new HttpsError("not-found", "Plan not found.");
   const plan = planSnap.data();
@@ -569,9 +570,9 @@ exports.autopay_createSubscription = onCall(async (request) => {
   return { ok: true, subscription: sub };
 });
 
-exports.autopay_cancelSubscription = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { subId } = request.data || {};
+exports.autopay_cancelSubscription = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { subId } = data || {};
   const ref = db.collection("subscriptions").doc(subId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Subscription not found.");
@@ -582,14 +583,14 @@ exports.autopay_cancelSubscription = onCall(async (request) => {
   return { ok: true };
 });
 
-exports.autopay_listSubscriptions = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_listSubscriptions = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const snap = await db.collection("subscriptions").where("customerId", "==", uid).get();
   return { ok: true, subscriptions: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
 
-exports.autopay_listMerchantSubscriptions = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_listMerchantSubscriptions = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const snap = await db.collection("subscriptions").where("merchantId", "==", uid).get();
   return { ok: true, subscriptions: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
@@ -646,22 +647,29 @@ async function processDueSubscriptions() {
   return results;
 }
 
-exports.autopay_processDueSubscriptions = onCall(async (request) => {
-  requireAuth(request);
+exports.autopay_processDueSubscriptions = onCall(async (data, context) => {
+  requireAuth(context);
   return { ok: true, processed: await processDueSubscriptions() };
 });
 
-exports.autopay_processDueSubscriptionsScheduled = onSchedule("every 1 hours", async () => {
-  return { ok: true, processed: await processDueSubscriptions() };
-});
+// Scheduled auto-charge runner. Enabled only when the project is on the
+// Blaze (pay-as-you-go) plan — Cloud Scheduler is not available on Spark.
+// Enable with: firebase functions:secrets:set ... or set the env var
+// AUTOPAY_ENABLE_SCHEDULER=1, then redeploy functions.
+if (process.env.AUTOPAY_ENABLE_SCHEDULER === "1") {
+  exports.autopay_processDueSubscriptionsScheduled = functions.pubsub
+    .schedule("every 1 hours")
+    .timeZone("Asia/Dhaka")
+    .onRun(async () => ({ ok: true, processed: await processDueSubscriptions() }));
+}
 
 /* ------------------------------------------------------------------ */
 /* Payouts                                                             */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_requestPayout = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { method = "bank", amount, account = "" } = request.data || {};
+exports.autopay_requestPayout = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { method = "bank", amount, account = "" } = data || {};
   const amt = requireAmount(amount, { min: 100 });
 
   return db.runTransaction(async (t) => {
@@ -683,8 +691,8 @@ exports.autopay_requestPayout = onCall(async (request) => {
   });
 });
 
-exports.autopay_listPayouts = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_listPayouts = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const snap = await db.collection("payouts").where("merchantId", "==", uid).get();
   return { ok: true, payouts: sortDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() }))).slice(0, 200) };
 });
@@ -693,9 +701,9 @@ exports.autopay_listPayouts = onCall(async (request) => {
 /* Listings                                                            */
 /* ------------------------------------------------------------------ */
 
-exports.autopay_listTransactions = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const { limit = 100 } = request.data || {};
+exports.autopay_listTransactions = onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const { limit = 100 } = data || {};
   const cap = Math.min(Number(limit) || 100, 200);
 
   const [out, incoming] = await Promise.all([
@@ -710,8 +718,8 @@ exports.autopay_listTransactions = onCall(async (request) => {
   return { ok: true, transactions: list };
 });
 
-exports.autopay_listCustomers = onCall(async (request) => {
-  const uid = requireAuth(request);
+exports.autopay_listCustomers = onCall(async (data, context) => {
+  const uid = requireAuth(context);
   const paid = await db.collection("transactions").where("toUid", "==", uid).get();
 
   const byCustomer = new Map();
