@@ -42,16 +42,34 @@ const db = getFirestore();
 /* ------------------------------------------------------------------ */
 /* Config                                                              */
 /* ------------------------------------------------------------------ */
+/* Custom values are read from (in order of priority):
+ *   1. process.env  (set by the Firebase runtime / emulator / CI)
+ *   2. functions.config().autopay.*  (set via `firebase functions:config:set`)
+ *   3. built-in defaults below
+ */
+let autopayConfig = {};
+try {
+  if (typeof functions.config === "function") {
+    autopayConfig = functions.config().autopay || {};
+  }
+} catch (e) { /* config unavailable (e.g. local unit tests) */ }
 
-const FEE_RATE = Number(process.env.AUTOPAY_FEE_RATE || 0.02);
-const FEE_MIN = Number(process.env.AUTOPAY_FEE_MIN || 5);
-const FEE_MAX = Number(process.env.AUTOPAY_FEE_MAX || 500);
-const OWNER_EMAIL = (process.env.AUTOPAY_OWNER_EMAIL || "officialmasudbro@gmail.com").toLowerCase();
-const OWNER_UID = process.env.AUTOPAY_OWNER_UID || "G5rWSqjeq4MYmqJxupU3WIRLqIB3";
+const env = (k) => (process.env[k] || "").toString().trim();
+
+const FEE_RATE = Number(env("AUTOPAY_FEE_RATE") || autopayConfig.fee_rate || 0.02);
+const FEE_MIN = Number(env("AUTOPAY_FEE_MIN") || autopayConfig.fee_min || 5);
+const FEE_MAX = Number(env("AUTOPAY_FEE_MAX") || autopayConfig.fee_max || 500);
+const OWNER_EMAIL = (env("AUTOPAY_OWNER_EMAIL") || autopayConfig.owner_email || "officialmasudbro@gmail.com").toLowerCase();
+const OWNER_UID = env("AUTOPAY_OWNER_UID") || autopayConfig.owner_uid || "G5rWSqjeq4MYmqJxupU3WIRLqIB3";
 const OWNER_PAYOUT = {
-  bkash: process.env.AUTOPAY_PAYOUT_BKASH || "01897537597",
-  nagad: process.env.AUTOPAY_PAYOUT_NAGAD || "01897537597",
+  bkash: env("AUTOPAY_PAYOUT_BKASH") || autopayConfig.payout_bkash || "01897537597",
+  nagad: env("AUTOPAY_PAYOUT_NAGAD") || autopayConfig.payout_nagad || "01897537597",
 };
+// Enable the hourly auto-charge scheduler (needs the Blaze plan):
+//   firebase functions:config:set autopay.enable_scheduler=1   (or set
+//   AUTOPAY_ENABLE_SCHEDULER=1 in the runtime environment)
+const ENABLE_SCHEDULER =
+  env("AUTOPAY_ENABLE_SCHEDULER") === "1" || String(autopayConfig.enable_scheduler) === "1";
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 function calcFee(amount) {
@@ -654,9 +672,10 @@ exports.autopay_processDueSubscriptions = onCall(async (data, context) => {
 
 // Scheduled auto-charge runner. Enabled only when the project is on the
 // Blaze (pay-as-you-go) plan — Cloud Scheduler is not available on Spark.
-// Enable with: firebase functions:secrets:set ... or set the env var
-// AUTOPAY_ENABLE_SCHEDULER=1, then redeploy functions.
-if (process.env.AUTOPAY_ENABLE_SCHEDULER === "1") {
+// Enable with:  firebase functions:config:set autopay.enable_scheduler=1
+// then redeploy functions (the dashboard "Run due charges" button works
+// without this on any plan).
+if (ENABLE_SCHEDULER) {
   exports.autopay_processDueSubscriptionsScheduled = functions.pubsub
     .schedule("every 1 hours")
     .timeZone("Asia/Dhaka")

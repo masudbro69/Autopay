@@ -48,9 +48,10 @@ else
   OWNER="${OWNER:-officialmasudbro@gmail.com}"
 fi
 # The backend already defaults to officialmasudbro@gmail.com and the owner
-# UID G5rWSqjeq4MYmqJxupU3WIRLqIB3, so this step is optional.
+# UID G5rWSqjeq4MYmqJxupU3WIRLqIB3, so this step is optional. It persists the
+# value via the v1 config API (read by functions.config().autopay.owner_email).
 if [ -n "$OWNER" ]; then
-  printf '%s' "$OWNER" | "${FB[@]}" functions:config:set autopay.owner_email="$OWNER" --project "$PROJECT" >/dev/null 2>&1 || \
+  "${FB[@]}" functions:config:set autopay.owner_email="$OWNER" --project "$PROJECT" >/dev/null 2>&1 || \
     echo "   ⚠️  Could not persist owner email (works without it — backend default used)."
 fi
 
